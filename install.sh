@@ -24,6 +24,7 @@ echo "→ Building (release, ~30s)..."
 
 echo "→ Installing to /Applications..."
 osascript -e 'quit app "WorklogBar"' 2>/dev/null || true
+pkill -x WorklogBar 2>/dev/null || true
 sleep 1
 rm -rf /Applications/WorklogBar.app
 cp -R build/WorklogBar.app /Applications/
