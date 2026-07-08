@@ -13,10 +13,10 @@ struct RootView: View {
                 switch tab {
                 case 0: TicketsView()
                 case 1: WeekView()
-                default: SettingsView()
+                default: ScrollView { SettingsView() }
                 }
             }
-            .frame(minHeight: 300, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             if let err = state.errorMessage {
                 Divider()
@@ -29,7 +29,7 @@ struct RootView: View {
                     .padding(.vertical, 6)
             }
         }
-        .frame(width: 480)
+        .frame(width: 480, height: 440)
         .task {
             if state.isConfigured {
                 await state.refresh()
@@ -787,6 +787,27 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            Divider()
+
+            Text("About")
+                .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    JiraGlyph(size: 14)
+                    Text("WorklogBar 0.1.0")
+                        .font(.caption.weight(.semibold))
+                }
+                Text("Made by Bruno Fevereiro")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("MIT License — free to use, modify and share.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link("github.com/BRUNO-FEVE/jira-worklog",
+                     destination: URL(string: "https://github.com/BRUNO-FEVE/jira-worklog")!)
+                    .font(.caption)
             }
         }
         .padding(12)
