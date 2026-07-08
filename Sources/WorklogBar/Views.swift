@@ -94,64 +94,80 @@ struct HeaderView: View {
 
 // MARK: - Tickets
 
+/// System `.popover` anchored to a button inside a ScrollView/LazyVStack
+/// computes the wrong screen position inside MenuBarExtra's window (can
+/// render entirely outside the app). Section forms use a plain in-place
+/// overlay instead, which lays out normally and can't mis-anchor.
+enum SectionFormTarget {
+    case new
+    case edit(TicketSection)
+
+    var section: TicketSection? {
+        if case .edit(let s) = self { return s }
+        return nil
+    }
+}
+
 struct TicketsView: View {
     @EnvironmentObject var state: AppState
     @State private var selected: Issue?
-    @State private var showAddSection = false
-    @State private var editingSection: TicketSection?
+    @State private var sectionForm: SectionFormTarget?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !state.isConfigured {
-                EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
-                            SectionBlock(
-                                section: section,
-                                index: index,
-                                total: state.sections.count,
-                                selected: $selected,
-                                onEdit: { editingSection = section }
-                            )
-                        }
-
-                        Button {
-                            showAddSection = true
-                        } label: {
-                            Label("Add section", systemImage: "plus.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .popover(isPresented: $showAddSection) {
-                            SectionFormView(existing: nil) { newSection in
-                                state.addSection(newSection)
-                                showAddSection = false
-                            } onCancel: {
-                                showAddSection = false
+        ZStack {
+            VStack(spacing: 0) {
+                if !state.isConfigured {
+                    EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
+                                SectionBlock(
+                                    section: section,
+                                    index: index,
+                                    total: state.sections.count,
+                                    selected: $selected,
+                                    onEdit: { sectionForm = .edit(section) }
+                                )
                             }
+
+                            Button {
+                                sectionForm = .new
+                            } label: {
+                                Label("Add section", systemImage: "plus.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                         }
+                        .padding(6)
                     }
-                    .padding(6)
+                }
+                if let issue = selected {
+                    Divider()
+                    LogTimeView(issue: issue) {
+                        withAnimation(.easeOut(duration: 0.15)) { selected = nil }
+                    }
                 }
             }
-            if let issue = selected {
-                Divider()
-                LogTimeView(issue: issue) {
-                    withAnimation(.easeOut(duration: 0.15)) { selected = nil }
+
+            if let target = sectionForm {
+                Color.black.opacity(0.2)
+                    .onTapGesture { sectionForm = nil }
+                SectionFormView(existing: target.section) { section in
+                    if case .edit = target {
+                        state.updateSection(section)
+                    } else {
+                        state.addSection(section)
+                    }
+                    sectionForm = nil
+                } onCancel: {
+                    sectionForm = nil
                 }
-            }
-        }
-        .popover(item: $editingSection) { section in
-            SectionFormView(existing: section) { updated in
-                state.updateSection(updated)
-                editingSection = nil
-            } onCancel: {
-                editingSection = nil
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
             }
         }
     }
