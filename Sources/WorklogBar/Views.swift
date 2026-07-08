@@ -805,9 +805,13 @@ struct SettingsView: View {
                 Text("MIT License — free to use, modify and share.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Link("github.com/BRUNO-FEVE/jira-worklog",
-                     destination: URL(string: "https://github.com/BRUNO-FEVE/jira-worklog")!)
-                    .font(.caption)
+                HStack(spacing: 10) {
+                    Link("GitHub",
+                         destination: URL(string: "https://github.com/BRUNO-FEVE/jira-worklog")!)
+                    Link("LinkedIn",
+                         destination: URL(string: "https://www.linkedin.com/in/bruno-fevereiro/")!)
+                }
+                .font(.caption)
             }
         }
         .padding(12)
