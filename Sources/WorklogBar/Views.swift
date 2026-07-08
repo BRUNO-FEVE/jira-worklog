@@ -32,9 +32,13 @@ struct RootView: View {
             }
         }
         .frame(width: 480, height: 440)
-        // Attached to the fixed-size view above, so .overlay is proposed
-        // exactly 480x440 — no ambiguous sizing for MenuBarExtra's
-        // auto-sizing panel to react to (see SectionFormTarget comment).
+        .clipped()
+        // MenuBarExtra(.window) auto-sizes its NSPanel by querying the view
+        // tree's *unconstrained ideal* size, which does not reliably respect
+        // an ancestor .frame() — an unbounded Color inside .overlay was
+        // enough to make the panel balloon. Pinning an explicit numeric
+        // frame + .clipped() directly on the overlay content (not just the
+        // ancestor) forces that query to resolve to a bounded value.
         .overlay {
             if let target = sectionForm {
                 ZStack {
@@ -53,6 +57,8 @@ struct RootView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
                 }
+                .frame(width: 480, height: 440)
+                .clipped()
             }
         }
         .task {
