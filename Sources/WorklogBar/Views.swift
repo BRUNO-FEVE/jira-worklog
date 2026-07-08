@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var state: AppState
     @State private var tab = 0
+    @State private var sectionForm: SectionFormTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -11,7 +12,7 @@ struct RootView: View {
 
             Group {
                 switch tab {
-                case 0: TicketsView()
+                case 0: TicketsView(sectionForm: $sectionForm)
                 case 1: WeekView()
                 case 2: ScrollView { SettingsView() }
                 default: AboutView()
@@ -31,6 +32,29 @@ struct RootView: View {
             }
         }
         .frame(width: 480, height: 440)
+        // Attached to the fixed-size view above, so .overlay is proposed
+        // exactly 480x440 — no ambiguous sizing for MenuBarExtra's
+        // auto-sizing panel to react to (see SectionFormTarget comment).
+        .overlay {
+            if let target = sectionForm {
+                ZStack {
+                    Color.black.opacity(0.2)
+                        .onTapGesture { sectionForm = nil }
+                    SectionFormView(existing: target.section) { section in
+                        if case .edit = target {
+                            state.updateSection(section)
+                        } else {
+                            state.addSection(section)
+                        }
+                        sectionForm = nil
+                    } onCancel: {
+                        sectionForm = nil
+                    }
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+                }
+            }
+        }
         .task {
             if state.isConfigured {
                 await state.refresh()
@@ -111,63 +135,44 @@ enum SectionFormTarget {
 struct TicketsView: View {
     @EnvironmentObject var state: AppState
     @State private var selected: Issue?
-    @State private var sectionForm: SectionFormTarget?
+    @Binding var sectionForm: SectionFormTarget?
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                if !state.isConfigured {
-                    EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
-                                SectionBlock(
-                                    section: section,
-                                    index: index,
-                                    total: state.sections.count,
-                                    selected: $selected,
-                                    onEdit: { sectionForm = .edit(section) }
-                                )
-                            }
-
-                            Button {
-                                sectionForm = .new
-                            } label: {
-                                Label("Add section", systemImage: "plus.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+        VStack(spacing: 0) {
+            if !state.isConfigured {
+                EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
+                            SectionBlock(
+                                section: section,
+                                index: index,
+                                total: state.sections.count,
+                                selected: $selected,
+                                onEdit: { sectionForm = .edit(section) }
+                            )
                         }
-                        .padding(6)
+
+                        Button {
+                            sectionForm = .new
+                        } label: {
+                            Label("Add section", systemImage: "plus.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                     }
-                }
-                if let issue = selected {
-                    Divider()
-                    LogTimeView(issue: issue) {
-                        withAnimation(.easeOut(duration: 0.15)) { selected = nil }
-                    }
+                    .padding(6)
                 }
             }
-
-            if let target = sectionForm {
-                Color.black.opacity(0.2)
-                    .onTapGesture { sectionForm = nil }
-                SectionFormView(existing: target.section) { section in
-                    if case .edit = target {
-                        state.updateSection(section)
-                    } else {
-                        state.addSection(section)
-                    }
-                    sectionForm = nil
-                } onCancel: {
-                    sectionForm = nil
+            if let issue = selected {
+                Divider()
+                LogTimeView(issue: issue) {
+                    withAnimation(.easeOut(duration: 0.15)) { selected = nil }
                 }
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
             }
         }
     }
