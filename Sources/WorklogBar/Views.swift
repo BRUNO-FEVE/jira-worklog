@@ -33,34 +33,6 @@ struct RootView: View {
         }
         .frame(width: 480, height: 440)
         .clipped()
-        // MenuBarExtra(.window) auto-sizes its NSPanel by querying the view
-        // tree's *unconstrained ideal* size, which does not reliably respect
-        // an ancestor .frame() — an unbounded Color inside .overlay was
-        // enough to make the panel balloon. Pinning an explicit numeric
-        // frame + .clipped() directly on the overlay content (not just the
-        // ancestor) forces that query to resolve to a bounded value.
-        .overlay {
-            if let target = sectionForm {
-                ZStack {
-                    Color.black.opacity(0.2)
-                        .onTapGesture { sectionForm = nil }
-                    SectionFormView(existing: target.section) { section in
-                        if case .edit = target {
-                            state.updateSection(section)
-                        } else {
-                            state.addSection(section)
-                        }
-                        sectionForm = nil
-                    } onCancel: {
-                        sectionForm = nil
-                    }
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
-                }
-                .frame(width: 480, height: 440)
-                .clipped()
-            }
-        }
         .task {
             if state.isConfigured {
                 await state.refresh()
@@ -126,8 +98,17 @@ struct HeaderView: View {
 
 /// System `.popover` anchored to a button inside a ScrollView/LazyVStack
 /// computes the wrong screen position inside MenuBarExtra's window (can
-/// render entirely outside the app). Section forms use a plain in-place
-/// overlay instead, which lays out normally and can't mis-anchor.
+/// render entirely outside the app). A ZStack + unconstrained Color
+/// "backdrop" overlay was tried next, but MenuBarExtra(.window)'s NSPanel
+/// re-derives an ideal content size from the SwiftUI tree on every layout
+/// pass, and that computation ballooned past 480x440 whenever the
+/// unconstrained Color existed anywhere in the tree — even pinned inside
+/// its own explicit .frame().clipped(). So the section form is instead
+/// appended inline into TicketsView's own VStack, exactly like LogTimeView
+/// below (which has never exhibited this bug): no floating layer, no
+/// unconstrained Color, just a child that pushes/shrinks the ScrollView
+/// above it within the already-fixed-size content area. The "modal" feel
+/// is approximated by dimming/disabling the ticket list underneath.
 enum SectionFormTarget {
     case new
     case edit(TicketSection)
@@ -173,8 +154,32 @@ struct TicketsView: View {
                     }
                     .padding(6)
                 }
+                // Dim + disable the list underneath while the section form
+                // is open, to keep a "modal" feel without an unconstrained
+                // overlay layer (see the comment on SectionFormTarget).
+                .opacity(sectionForm == nil ? 1 : 0.35)
+                .disabled(sectionForm != nil)
+                .animation(.easeOut(duration: 0.15), value: sectionForm != nil)
             }
-            if let issue = selected {
+            if let target = sectionForm {
+                Divider()
+                HStack {
+                    Spacer(minLength: 0)
+                    SectionFormView(existing: target.section) { section in
+                        if case .edit = target {
+                            state.updateSection(section)
+                        } else {
+                            state.addSection(section)
+                        }
+                        sectionForm = nil
+                    } onCancel: {
+                        sectionForm = nil
+                    }
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 10)
+            } else if let issue = selected {
                 Divider()
                 LogTimeView(issue: issue) {
                     withAnimation(.easeOut(duration: 0.15)) { selected = nil }
