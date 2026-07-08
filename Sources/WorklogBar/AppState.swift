@@ -65,7 +65,7 @@ final class AppState: ObservableObject {
     }
 
     var menuTitle: String {
-        todayLogged > 0 ? Format.hours(todayLogged) : "log"
+        todayLogged > 0 ? Format.hours(todayLogged) : ""
     }
 
     func browseURL(for issueKey: String) -> URL? {
