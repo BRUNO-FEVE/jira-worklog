@@ -1,0 +1,52 @@
+# XcodeGen project definition. Requires full Xcode to build the widget:
+#   xcodegen && xcodebuild -scheme WorklogBar -configuration Release build
+name: WorklogBar
+options:
+  bundleIdPrefix: com.worklogbar
+  deploymentTarget:
+    macOS: "14.0"
+
+settings:
+  base:
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    SWIFT_VERSION: "5.9"
+
+targets:
+  WorklogBar:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/WorklogBar
+    info:
+      path: BuildSupport/App-Info.plist
+      properties:
+        CFBundleDisplayName: WorklogBar
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worklogbar.app
+    dependencies:
+      - target: WorklogBarWidget
+        embed: true
+
+  WorklogBarWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - WidgetExtension
+      - Sources/WorklogBar/Snapshot.swift
+      - Sources/WorklogBar/Models.swift
+    info:
+      path: BuildSupport/Widget-Info.plist
+      properties:
+        CFBundleDisplayName: WorklogBar Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.worklogbar.app.widget
+        SKIP_INSTALL: true
