@@ -16,7 +16,10 @@ struct WorklogBarApp: App {
             RootView()
                 .environmentObject(state)
         } label: {
-            Label(state.menuTitle, systemImage: "clock.badge.checkmark")
+            HStack(spacing: 4) {
+                JiraGlyph(size: 16)
+                Text(state.menuTitle)
+            }
         }
         .menuBarExtraStyle(.window)
     }

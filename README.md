@@ -2,26 +2,46 @@
 
 Native macOS menu bar app for Jira time tracking. Shows today's logged hours in the menu bar, lists your open assigned tickets with one-click worklog entry, and renders a weekly table of time logged per day per ticket.
 
-## Run
+## Installation
 
-Development (bare executable):
+### One-line install (recommended)
+
+Builds from source on your machine — no Gatekeeper warnings, no App Store. Requires the Swift toolchain (`xcode-select --install` if you don't have it):
 
 ```sh
-swift run
+curl -fsSL https://raw.githubusercontent.com/BRUNO-FEVE/jira-worklog/main/install.sh | sh
 ```
 
-App bundle without Xcode (no widgets — installs menu bar app only):
+The app lands in `/Applications` and starts automatically. Look for the Jira icon in your menu bar.
+
+### DMG
+
+Download `WorklogBar-x.y.z.dmg` from [Releases](https://github.com/BRUNO-FEVE/jira-worklog/releases), open it, and drag WorklogBar into Applications.
+
+> **First launch:** the DMG build is not yet notarized by Apple, so macOS will warn about an unidentified developer. Right-click the app → **Open** → **Open** (needed only once). If the option doesn't appear: `xattr -dr com.apple.quarantine /Applications/WorklogBar.app`
+
+### Build from source manually
 
 ```sh
+git clone https://github.com/BRUNO-FEVE/jira-worklog.git
+cd jira-worklog
 ./make_app.sh && cp -R build/WorklogBar.app /Applications/
 ```
 
-Full build with desktop widgets (requires full Xcode from the App Store):
+Other build modes:
 
 ```sh
-xcodegen
-xcodebuild -scheme WorklogBar -configuration Release build
+swift run          # development, bare executable
+./make_dmg.sh      # package a DMG into build/
+xcodegen && xcodebuild -scheme WorklogBar -configuration Release build
+                   # full build incl. desktop widgets (requires full Xcode)
 ```
+
+## First-time setup
+
+1. Click the Jira icon in the menu bar → **Settings**
+2. Enter your Jira site URL (e.g. `https://yourcompany.atlassian.net`), your email, and an API token from [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens) (Data Center: just a Personal Access Token, no email)
+3. **Save & Connect** — your tickets and week appear immediately
 
 A clock icon appears in the menu bar. Open **Settings** inside the popover and enter:
 

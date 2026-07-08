@@ -47,8 +47,7 @@ struct HeaderView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: "clock.badge.checkmark")
-                    .foregroundStyle(Color.accentColor)
+                JiraGlyph(size: 18)
                 Text("WorklogBar")
                     .font(.system(.body, design: .rounded, weight: .semibold))
                 Spacer()
