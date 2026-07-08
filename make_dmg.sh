@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 
-VERSION=0.1.0
+VERSION=0.1.1
 ./make_app.sh
 
 DMG="build/WorklogBar-$VERSION.dmg"

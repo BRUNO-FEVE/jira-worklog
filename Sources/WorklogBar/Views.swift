@@ -804,7 +804,7 @@ struct AboutView: View {
             VStack(spacing: 2) {
                 Text("WorklogBar")
                     .font(.system(.title3, design: .rounded, weight: .bold))
-                Text("Version 0.1.0")
+                Text("Version 0.1.1")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
