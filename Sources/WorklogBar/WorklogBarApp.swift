@@ -9,6 +9,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static let popoverSize = NSSize(width: 480, height: 440)
     private var resizeObserver: NSObjectProtocol?
+    private var isAdjusting = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -16,16 +17,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSWindow.didResizeNotification,
             object: nil,
             queue: .main
-        ) { note in
-            guard let window = note.object as? NSWindow else { return }
+        ) { [weak self] note in
+            guard let self, !self.isAdjusting, let window = note.object as? NSWindow else { return }
             let size = window.frame.size
             let target = Self.popoverSize
             let tolerance: CGFloat = 1
             guard abs(size.width - target.width) > tolerance || abs(size.height - target.height) > tolerance else { return }
-            var frame = window.frame
-            frame.origin.y += frame.size.height - target.height
-            frame.size = target
-            window.setFrame(frame, display: true)
+
+            // Calling setFrame synchronously from inside didResizeNotification
+            // re-enters AppKit's constraint engine and stack-overflows.
+            // Deferring to the next run loop tick breaks that recursion.
+            self.isAdjusting = true
+            DispatchQueue.main.async { [weak window] in
+                defer { self.isAdjusting = false }
+                guard let window else { return }
+                var frame = window.frame
+                frame.origin.y += frame.size.height - target.height
+                frame.size = target
+                window.setFrame(frame, display: true)
+            }
         }
     }
 }
