@@ -127,39 +127,6 @@ struct WeekGrid {
     var grandTotal: Int { rows.reduce(0) { $0 + $1.total } }
 }
 
-struct TicketSection: Identifiable, Codable, Equatable {
-    enum Kind: Codable, Equatable {
-        case assignedToMe
-        case byStatus(statuses: [String])
-        case pinned(keys: [String])
-        case customJQL(String)
-
-        var jql: String? {
-            switch self {
-            case .assignedToMe:
-                return "assignee = currentUser() AND resolution = EMPTY ORDER BY updated DESC"
-            case .byStatus(let statuses):
-                let clean = statuses.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                guard !clean.isEmpty else { return nil }
-                let list = clean.map { "\"\($0.replacingOccurrences(of: "\"", with: "\\\""))\"" }.joined(separator: ",")
-                return "assignee = currentUser() AND status in (\(list)) ORDER BY updated DESC"
-            case .pinned(let keys):
-                guard !keys.isEmpty else { return nil }
-                let list = keys.map { "\"\($0)\"" }.joined(separator: ",")
-                return "key in (\(list)) ORDER BY updated DESC"
-            case .customJQL(let raw):
-                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : trimmed
-            }
-        }
-    }
-
-    var id: UUID = UUID()
-    var name: String
-    var kind: Kind
-    var collapsed: Bool = false
-}
-
 enum Format {
     static func hours(_ seconds: Int) -> String {
         let h = seconds / 3600

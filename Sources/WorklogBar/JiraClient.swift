@@ -41,6 +41,10 @@ struct JiraClient {
         try await decode(request(path: "/rest/api/2/myself"))
     }
 
+    func assignedIssues() async throws -> [Issue] {
+        try await search(jql: "assignee = currentUser() AND resolution = EMPTY ORDER BY updated DESC")
+    }
+
     func issuesWithMyWorklogs(from startDate: String, before endDateExclusive: String) async throws -> [Issue] {
         try await search(jql: "worklogAuthor = currentUser() AND worklogDate >= \"\(startDate)\" AND worklogDate < \"\(endDateExclusive)\"")
     }
@@ -85,30 +89,15 @@ struct JiraClient {
     }
 
     // Cloud's /rest/api/2/search was replaced by /search/jql; DC still uses the classic endpoint.
-    func search(jql: String, maxResults: Int = 50) async throws -> [Issue] {
+    private func search(jql: String) async throws -> [Issue] {
         let path = config.isCloud ? "/rest/api/3/search/jql" : "/rest/api/2/search"
         let query = [
             URLQueryItem(name: "jql", value: jql),
             URLQueryItem(name: "fields", value: "summary,status,issuetype"),
-            URLQueryItem(name: "maxResults", value: String(maxResults)),
+            URLQueryItem(name: "maxResults", value: "50"),
         ]
         let resp: SearchResponse = try await decode(request(path: path, query: query))
         return resp.issues
-    }
-
-    /// Searches every project the user can see — used for pinning tickets
-    /// (meetings, shared work) that aren't necessarily assigned to them.
-    func searchIssues(matching text: String) async throws -> [Issue] {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return [] }
-        let jql: String
-        if let range = trimmed.range(of: #"^[A-Za-z][A-Za-z0-9]*-\d+$"#, options: .regularExpression) {
-            jql = "key = \"\(trimmed[range].uppercased())\""
-        } else {
-            let escaped = trimmed.replacingOccurrences(of: "\"", with: "\\\"")
-            jql = "text ~ \"\(escaped)*\" ORDER BY updated DESC"
-        }
-        return try await search(jql: jql, maxResults: 15)
     }
 
     private func request(

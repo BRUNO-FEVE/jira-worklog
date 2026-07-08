@@ -38,10 +38,7 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(reminderMinutes, forKey: "reminderMinutes") }
     }
 
-    @Published var sections: [TicketSection] = AppState.loadSections() {
-        didSet { saveSections() }
-    }
-    @Published var sectionIssues: [UUID: [Issue]] = [:]
+    @Published var assigned: [Issue] = []
     @Published var week: WeekGrid = .empty
     @Published var weekOffset = 0
     @Published var todayLogged = 0
@@ -88,90 +85,15 @@ final class AppState: ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            myself = try await client.myself()
-            async let sectionsTask: () = reloadSections(client: client)
-            async let weekTask: () = loadWeek(client: client)
-            _ = try await (sectionsTask, weekTask)
+            async let me = client.myself()
+            async let issues = client.assignedIssues()
+            myself = try await me
+            assigned = try await issues
+            try await loadWeek(client: client)
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
-    }
-
-    // MARK: - Sections
-
-    private static let sectionsKey = "ticketSections"
-
-    private static func loadSections() -> [TicketSection] {
-        if let data = UserDefaults.standard.data(forKey: sectionsKey),
-           let decoded = try? JSONDecoder().decode([TicketSection].self, from: data), !decoded.isEmpty {
-            return decoded
-        }
-        return [TicketSection(name: "Assigned to me", kind: .assignedToMe)]
-    }
-
-    private func saveSections() {
-        guard let data = try? JSONEncoder().encode(sections) else { return }
-        UserDefaults.standard.set(data, forKey: Self.sectionsKey)
-    }
-
-    private func reloadSections(client: JiraClient) async throws {
-        let currentSections = sections
-        try await withThrowingTaskGroup(of: (UUID, [Issue]).self) { group in
-            for section in currentSections {
-                group.addTask {
-                    guard let jql = section.kind.jql else { return (section.id, []) }
-                    let issues = try await client.search(jql: jql)
-                    return (section.id, issues)
-                }
-            }
-            var results: [UUID: [Issue]] = [:]
-            for try await (id, issues) in group { results[id] = issues }
-            sectionIssues = results
-        }
-    }
-
-    func refreshSections() async {
-        guard let client else { return }
-        errorMessage = nil
-        do {
-            try await reloadSections(client: client)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func addSection(_ section: TicketSection) {
-        sections.append(section)
-        Task { await refreshSections() }
-    }
-
-    func updateSection(_ section: TicketSection) {
-        guard let idx = sections.firstIndex(where: { $0.id == section.id }) else { return }
-        sections[idx] = section
-        Task { await refreshSections() }
-    }
-
-    func deleteSection(_ id: UUID) {
-        sections.removeAll { $0.id == id }
-        sectionIssues.removeValue(forKey: id)
-    }
-
-    func moveSection(_ id: UUID, direction: Int) {
-        guard let idx = sections.firstIndex(where: { $0.id == id }) else { return }
-        let newIdx = idx + direction
-        guard sections.indices.contains(newIdx) else { return }
-        sections.swapAt(idx, newIdx)
-    }
-
-    func toggleCollapsed(_ id: UUID) {
-        guard let idx = sections.firstIndex(where: { $0.id == id }) else { return }
-        sections[idx].collapsed.toggle()
-    }
-
-    func searchAnyIssue(_ text: String) async -> [Issue] {
-        guard let client else { return [] }
-        return (try? await client.searchIssues(matching: text)) ?? []
     }
 
     var dailyTargetSeconds: Int { Int(dailyTargetHours * 3600) }
@@ -255,7 +177,7 @@ final class AppState: ObservableObject {
         errorMessage = nil
         do {
             try await client.applyTransition(issueKey: issueKey, transitionId: transitionId)
-            try await reloadSections(client: client)
+            assigned = try await client.assignedIssues()
             return true
         } catch {
             errorMessage = error.localizedDescription
