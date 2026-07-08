@@ -13,7 +13,8 @@ struct RootView: View {
                 switch tab {
                 case 0: TicketsView()
                 case 1: WeekView()
-                default: ScrollView { SettingsView() }
+                case 2: ScrollView { SettingsView() }
+                default: AboutView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -80,6 +81,7 @@ struct HeaderView: View {
                 Label("Tickets", systemImage: "list.bullet").tag(0)
                 Label("Week", systemImage: "calendar").tag(1)
                 Label("Settings", systemImage: "gearshape").tag(2)
+                Label("About", systemImage: "info.circle").tag(3)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -788,34 +790,53 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Divider()
-
-            Text("About")
-                .font(.subheadline.weight(.semibold))
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    JiraGlyph(size: 14)
-                    Text("WorklogBar 0.1.0")
-                        .font(.caption.weight(.semibold))
-                }
-                Text("Made by Bruno Fevereiro")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("MIT License — free to use, modify and share.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    Link("GitHub",
-                         destination: URL(string: "https://github.com/BRUNO-FEVE/jira-worklog")!)
-                    Link("LinkedIn",
-                         destination: URL(string: "https://www.linkedin.com/in/bruno-fevereiro/")!)
-                }
-                .font(.caption)
-            }
         }
         .padding(12)
         .onAppear { tokenField = state.token }
+    }
+}
+
+struct AboutView: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            JiraGlyph(size: 56)
+            VStack(spacing: 2) {
+                Text("WorklogBar")
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                Text("Version 0.1.0")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Jira time tracking from your menu bar.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Divider()
+                .frame(width: 180)
+                .padding(.vertical, 2)
+
+            VStack(spacing: 4) {
+                Text("Made by Bruno Fevereiro")
+                    .font(.caption.weight(.medium))
+                Text("MIT License — free to use, modify and share.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 14) {
+                Link(destination: URL(string: "https://github.com/BRUNO-FEVE/jira-worklog")!) {
+                    Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                Link(destination: URL(string: "https://www.linkedin.com/in/bruno-fevereiro/")!) {
+                    Label("LinkedIn", systemImage: "person.crop.square")
+                }
+            }
+            .font(.caption)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(12)
     }
 }
 
