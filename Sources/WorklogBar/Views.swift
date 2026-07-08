@@ -3,7 +3,6 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject var state: AppState
     @State private var tab = 0
-    @State private var sectionForm: SectionFormTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,7 +11,7 @@ struct RootView: View {
 
             Group {
                 switch tab {
-                case 0: TicketsView(sectionForm: $sectionForm)
+                case 0: TicketsView()
                 case 1: WeekView()
                 case 2: ScrollView { SettingsView() }
                 default: AboutView()
@@ -32,7 +31,6 @@ struct RootView: View {
             }
         }
         .frame(width: 480, height: 440)
-        .clipped()
         .task {
             if state.isConfigured {
                 await state.refresh()
@@ -96,33 +94,9 @@ struct HeaderView: View {
 
 // MARK: - Tickets
 
-/// System `.popover` anchored to a button inside a ScrollView/LazyVStack
-/// computes the wrong screen position inside MenuBarExtra's window (can
-/// render entirely outside the app). A ZStack + unconstrained Color
-/// "backdrop" overlay was tried next, but MenuBarExtra(.window)'s NSPanel
-/// re-derives an ideal content size from the SwiftUI tree on every layout
-/// pass, and that computation ballooned past 480x440 whenever the
-/// unconstrained Color existed anywhere in the tree — even pinned inside
-/// its own explicit .frame().clipped(). So the section form is instead
-/// appended inline into TicketsView's own VStack, exactly like LogTimeView
-/// below (which has never exhibited this bug): no floating layer, no
-/// unconstrained Color, just a child that pushes/shrinks the ScrollView
-/// above it within the already-fixed-size content area. The "modal" feel
-/// is approximated by dimming/disabling the ticket list underneath.
-enum SectionFormTarget {
-    case new
-    case edit(TicketSection)
-
-    var section: TicketSection? {
-        if case .edit(let s) = self { return s }
-        return nil
-    }
-}
-
 struct TicketsView: View {
     @EnvironmentObject var state: AppState
     @State private var selected: Issue?
-    @Binding var sectionForm: SectionFormTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -137,12 +111,12 @@ struct TicketsView: View {
                                 index: index,
                                 total: state.sections.count,
                                 selected: $selected,
-                                onEdit: { sectionForm = .edit(section) }
+                                onEdit: { SectionFormPanelController.show(existing: section, state: state) }
                             )
                         }
 
                         Button {
-                            sectionForm = .new
+                            SectionFormPanelController.show(existing: nil, state: state)
                         } label: {
                             Label("Add section", systemImage: "plus.circle")
                                 .font(.caption)
@@ -154,32 +128,8 @@ struct TicketsView: View {
                     }
                     .padding(6)
                 }
-                // Dim + disable the list underneath while the section form
-                // is open, to keep a "modal" feel without an unconstrained
-                // overlay layer (see the comment on SectionFormTarget).
-                .opacity(sectionForm == nil ? 1 : 0.35)
-                .disabled(sectionForm != nil)
-                .animation(.easeOut(duration: 0.15), value: sectionForm != nil)
             }
-            if let target = sectionForm {
-                Divider()
-                HStack {
-                    Spacer(minLength: 0)
-                    SectionFormView(existing: target.section) { section in
-                        if case .edit = target {
-                            state.updateSection(section)
-                        } else {
-                            state.addSection(section)
-                        }
-                        sectionForm = nil
-                    } onCancel: {
-                        sectionForm = nil
-                    }
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, 10)
-            } else if let issue = selected {
+            if let issue = selected {
                 Divider()
                 LogTimeView(issue: issue) {
                     withAnimation(.easeOut(duration: 0.15)) { selected = nil }
