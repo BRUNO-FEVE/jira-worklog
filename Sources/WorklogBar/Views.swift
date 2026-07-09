@@ -94,45 +94,79 @@ struct HeaderView: View {
 
 // MARK: - Tickets
 
+/// Which section the form is editing (nil = the list is showing).
+/// The form *replaces* the Tickets tab content entirely rather than being
+/// presented as a popover, overlay, or separate window — a plain content
+/// swap is the one presentation that demonstrably never triggers
+/// MenuBarExtra(.window)'s auto-resize misbehavior (it's the same
+/// mechanism as switching tabs).
+enum SectionFormTarget {
+    case new
+    case edit(TicketSection)
+
+    var section: TicketSection? {
+        if case .edit(let s) = self { return s }
+        return nil
+    }
+}
+
 struct TicketsView: View {
     @EnvironmentObject var state: AppState
     @State private var selected: Issue?
+    @State private var sectionForm: SectionFormTarget?
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !state.isConfigured {
-                EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
-                            SectionBlock(
-                                section: section,
-                                index: index,
-                                total: state.sections.count,
-                                selected: $selected,
-                                onEdit: { SectionFormPanelController.show(existing: section, state: state) }
-                            )
-                        }
-
-                        Button {
-                            SectionFormPanelController.show(existing: nil, state: state)
-                        } label: {
-                            Label("Add section", systemImage: "plus.circle")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+        if let target = sectionForm {
+            ScrollView {
+                SectionFormView(existing: target.section) { section in
+                    if case .edit = target {
+                        state.updateSection(section)
+                    } else {
+                        state.addSection(section)
                     }
-                    .padding(6)
+                    sectionForm = nil
+                } onCancel: {
+                    sectionForm = nil
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
-            if let issue = selected {
-                Divider()
-                LogTimeView(issue: issue) {
-                    withAnimation(.easeOut(duration: 0.15)) { selected = nil }
+        } else {
+            VStack(spacing: 0) {
+                if !state.isConfigured {
+                    EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
+                                SectionBlock(
+                                    section: section,
+                                    index: index,
+                                    total: state.sections.count,
+                                    selected: $selected,
+                                    onEdit: { sectionForm = .edit(section) }
+                                )
+                            }
+
+                            Button {
+                                sectionForm = .new
+                            } label: {
+                                Label("Add section", systemImage: "plus.circle")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                        }
+                        .padding(6)
+                    }
+                }
+                if let issue = selected {
+                    Divider()
+                    LogTimeView(issue: issue) {
+                        withAnimation(.easeOut(duration: 0.15)) { selected = nil }
+                    }
                 }
             }
         }
