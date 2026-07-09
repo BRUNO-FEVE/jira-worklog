@@ -100,21 +100,31 @@ struct TicketsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if state.assigned.isEmpty {
-                EmptyStateView(
-                    icon: "tray",
-                    text: state.isConfigured ? "No open tickets assigned to you." : "Configure Jira in Settings first."
-                )
+            if !state.isConfigured {
+                EmptyStateView(icon: "tray", text: "Configure Jira in Settings first.")
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(state.assigned) { issue in
-                            TicketRow(issue: issue, isSelected: selected == issue) {
-                                withAnimation(.easeOut(duration: 0.15)) {
-                                    selected = selected == issue ? nil : issue
-                                }
-                            }
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(state.sections.enumerated()), id: \.element.id) { index, section in
+                            SectionBlock(
+                                section: section,
+                                index: index,
+                                total: state.sections.count,
+                                selected: $selected,
+                                onEdit: { SectionFormPanelController.show(existing: section, state: state) }
+                            )
                         }
+
+                        Button {
+                            SectionFormPanelController.show(existing: nil, state: state)
+                        } label: {
+                            Label("Add section", systemImage: "plus.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                     }
                     .padding(6)
                 }
@@ -125,6 +135,297 @@ struct TicketsView: View {
                     withAnimation(.easeOut(duration: 0.15)) { selected = nil }
                 }
             }
+        }
+    }
+}
+
+struct SectionBlock: View {
+    @EnvironmentObject var state: AppState
+    let section: TicketSection
+    let index: Int
+    let total: Int
+    @Binding var selected: Issue?
+    let onEdit: () -> Void
+    @State private var hoveringHeader = false
+
+    private var issues: [Issue] { state.sectionIssues[section.id] ?? [] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button {
+                    state.toggleCollapsed(section.id)
+                } label: {
+                    Image(systemName: section.collapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Text(section.name)
+                    .font(.caption.weight(.semibold))
+                Text("\(issues.count)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .background(.quaternary, in: Capsule())
+
+                Spacer()
+
+                if hoveringHeader {
+                    if index > 0 {
+                        Button { state.moveSection(section.id, direction: -1) } label: {
+                            Image(systemName: "chevron.up")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Move up")
+                    }
+                    if index < total - 1 {
+                        Button { state.moveSection(section.id, direction: 1) } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Move down")
+                    }
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Edit section")
+                    Button {
+                        state.deleteSection(section.id)
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.red)
+                    .help("Delete section")
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .onHover { hoveringHeader = $0 }
+
+            if !section.collapsed {
+                if issues.isEmpty {
+                    Text("No tickets")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, 20)
+                        .padding(.bottom, 4)
+                } else {
+                    ForEach(issues) { issue in
+                        TicketRow(issue: issue, isSelected: selected == issue) {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                selected = selected == issue ? nil : issue
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct SectionFormView: View {
+    let existing: TicketSection?
+    let onSave: (TicketSection) -> Void
+    let onCancel: () -> Void
+
+    @EnvironmentObject var state: AppState
+
+    @State private var name: String
+    @State private var typeIndex: Int
+    @State private var statusText: String
+    @State private var customJQL: String
+    @State private var pinnedKeys: [String]
+    @State private var searchText = ""
+    @State private var searchResults: [Issue] = []
+    @State private var searching = false
+
+    private static let typeLabels = ["Assigned to me", "By status", "Pinned", "Custom JQL"]
+
+    init(existing: TicketSection?, onSave: @escaping (TicketSection) -> Void, onCancel: @escaping () -> Void) {
+        self.existing = existing
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _name = State(initialValue: existing?.name ?? "")
+        switch existing?.kind {
+        case nil, .assignedToMe?:
+            _typeIndex = State(initialValue: 0)
+            _statusText = State(initialValue: "")
+            _pinnedKeys = State(initialValue: [])
+            _customJQL = State(initialValue: "")
+        case .byStatus(let statuses)?:
+            _typeIndex = State(initialValue: 1)
+            _statusText = State(initialValue: statuses.joined(separator: ", "))
+            _pinnedKeys = State(initialValue: [])
+            _customJQL = State(initialValue: "")
+        case .pinned(let keys)?:
+            _typeIndex = State(initialValue: 2)
+            _statusText = State(initialValue: "")
+            _pinnedKeys = State(initialValue: keys)
+            _customJQL = State(initialValue: "")
+        case .customJQL(let jql)?:
+            _typeIndex = State(initialValue: 3)
+            _statusText = State(initialValue: "")
+            _pinnedKeys = State(initialValue: [])
+            _customJQL = State(initialValue: jql)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(existing == nil ? "New section" : "Edit section")
+                .font(.subheadline.weight(.semibold))
+
+            TextField("Section name", text: $name)
+                .textFieldStyle(.roundedBorder)
+
+            Picker("", selection: $typeIndex) {
+                ForEach(0..<Self.typeLabels.count, id: \.self) { i in
+                    Text(Self.typeLabels[i]).tag(i)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            switch typeIndex {
+            case 0:
+                Text("Open tickets assigned to you.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case 1:
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("e.g. Done, In Review", text: $statusText)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Comma-separated Jira status names, scoped to tickets assigned to you.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            case 2:
+                VStack(alignment: .leading, spacing: 6) {
+                    if !pinnedKeys.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(pinnedKeys, id: \.self) { key in
+                                HStack {
+                                    Text(key)
+                                        .font(.caption.monospaced().weight(.semibold))
+                                    Spacer()
+                                    Button {
+                                        pinnedKeys.removeAll { $0 == key }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                            }
+                        }
+                    }
+                    HStack {
+                        TextField("Search any ticket (key or text)", text: $searchText)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(runSearch)
+                        Button("Search", action: runSearch)
+                            .disabled(searchText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    if searching {
+                        ProgressView().controlSize(.small)
+                    } else if !searchResults.isEmpty {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(searchResults) { issue in
+                                    Button {
+                                        if !pinnedKeys.contains(issue.key) { pinnedKeys.append(issue.key) }
+                                        searchResults.removeAll { $0.id == issue.id }
+                                    } label: {
+                                        HStack {
+                                            Text(issue.key)
+                                                .font(.caption.monospaced().weight(.semibold))
+                                            Text(issue.fields.summary)
+                                                .font(.caption)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            Image(systemName: "plus.circle")
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 100)
+                    }
+                }
+            default:
+                VStack(alignment: .leading, spacing: 4) {
+                    TextField("assignee = ... AND ...", text: $customJQL)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption.monospaced())
+                    Text("Advanced: any valid JQL.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack {
+                if existing != nil {
+                    Button("Delete", role: .destructive) {
+                        state.deleteSection(existing!.id)
+                        onCancel()
+                    }
+                }
+                Spacer()
+                Button("Cancel", action: onCancel)
+                Button(existing == nil ? "Create" : "Save") {
+                    onSave(buildSection())
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || !isValid)
+            }
+        }
+        .padding(12)
+        .frame(width: 300)
+    }
+
+    private var isValid: Bool {
+        switch typeIndex {
+        case 1: return !statusText.trimmingCharacters(in: .whitespaces).isEmpty
+        case 2: return !pinnedKeys.isEmpty
+        case 3: return !customJQL.trimmingCharacters(in: .whitespaces).isEmpty
+        default: return true
+        }
+    }
+
+    private func buildSection() -> TicketSection {
+        let kind: TicketSection.Kind
+        switch typeIndex {
+        case 1:
+            let statuses = statusText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            kind = .byStatus(statuses: statuses)
+        case 2:
+            kind = .pinned(keys: pinnedKeys)
+        case 3:
+            kind = .customJQL(customJQL)
+        default:
+            kind = .assignedToMe
+        }
+        if let existing {
+            return TicketSection(id: existing.id, name: name, kind: kind, collapsed: existing.collapsed)
+        }
+        return TicketSection(name: name, kind: kind)
+    }
+
+    private func runSearch() {
+        let q = searchText.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        searching = true
+        Task {
+            searchResults = await state.searchAnyIssue(q)
+            searching = false
         }
     }
 }
